@@ -1,0 +1,26 @@
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== 构建产物 =====
+target/
+dist/
+node_modules/
+
+# ===== 运行时产物 =====
+tmpCode/
+*.class
+
+# ===== 隐私配置（口令文件不入库，模板见 *.example）=====
+**/application.yml
+**/application-*.yml
+**/docker-compose.env.yml
+
+# ===== 本地分析/设计文档（不入库）=====
+ANALYSIS.md
+TECH_DESIGN.md
