@@ -1,0 +1,117 @@
+/* ===== LeetCode 风格全局设计变量与基础样式（仅 UI 层，不涉及任何业务逻辑） ===== */
+:root {
+  --lc-bg: #f7f8fa;
+  --lc-card-bg: #ffffff;
+  --lc-border: #e4e7eb;
+  --lc-border-light: #eff1f4;
+  --lc-text-primary: #1a1a1a;
+  --lc-text-secondary: #565866;
+  --lc-text-tertiary: #838a95;
+  --lc-primary: #ffa116;
+  --lc-primary-hover: #ff9c0a;
+  --lc-primary-bg: #fff3e0;
+  --lc-easy: #2db55d;
+  --lc-easy-bg: #e7f5ee;
+  --lc-medium: #ffb800;
+  --lc-medium-bg: #fff8e6;
+  --lc-hard: #ef4743;
+  --lc-hard-bg: #fdeeec;
+  --lc-link: #0a6cd6;
+  --lc-radius: 12px;
+  --lc-radius-sm: 8px;
+  --lc-font:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --lc-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+/* ---- 覆盖 Arco 主色为 LeetCode 橙（Arco 在 body 上定义 --primary-*，需同选择器覆盖） ---- */
+body {
+  --primary-1: 255, 243, 224;
+  --primary-2: 255, 228, 196;
+  --primary-3: 255, 214, 158;
+  --primary-4: 255, 199, 128;
+  --primary-5: 255, 180, 83;
+  --primary-6: 255, 161, 22;
+  --primary-7: 230, 140, 10;
+  --primary-8: 204, 122, 5;
+  --primary-9: 179, 105, 3;
+  --primary-10: 153, 88, 1;
+}
+
+html,
+body {
+  background: var(--lc-bg);
+  color: var(--lc-text-primary);
+  font-family: var(--lc-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- 通用卡片 ---- */
+.lc-card {
+  background: var(--lc-card-bg);
+  border: 1px solid var(--lc-border-light);
+  border-radius: var(--lc-radius);
+  box-shadow: var(--lc-shadow);
+}
+
+/* ---- 难度标签 ---- */
+.lc-difficulty {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.lc-difficulty--easy {
+  color: var(--lc-easy);
+  background: var(--lc-easy-bg);
+}
+
+.lc-difficulty--medium {
+  color: #c58f00;
+  background: var(--lc-medium-bg);
+}
+
+.lc-difficulty--hard {
+  color: var(--lc-hard);
+  background: var(--lc-hard-bg);
+}
+
+.lc-difficulty--none {
+  color: var(--lc-text-tertiary);
+  background: var(--lc-border-light);
+}
+
+/* ---- 页面标题 ---- */
+.lc-page-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--lc-text-primary);
+}
+
+/* ---- Arco 组件的全局微调（视觉对齐 LeetCode，不影响交互行为） ---- */
+.arco-btn-primary {
+  border-radius: var(--lc-radius-sm);
+}
+
+.arco-table-th {
+  background: var(--lc-card-bg) !important;
+  color: var(--lc-text-tertiary);
+  font-weight: 500;
+}
+
+.arco-table-td-content {
+  color: var(--lc-text-primary);
+}
+
+.arco-card {
+  border-radius: var(--lc-radius);
+}
+
+.arco-tag {
+  border-radius: 999px;
+}
