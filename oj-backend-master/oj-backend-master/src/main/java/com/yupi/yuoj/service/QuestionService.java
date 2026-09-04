@@ -51,5 +51,21 @@ public interface QuestionService extends IService<Question> {
      * @return
      */
     Page<QuestionVO> getQuestionVOPage(Page<Question> questionPage, HttpServletRequest request);
-    
+
+    /**
+     * 题目提交数原子自增（+1），数据库端单语句自增，保证并发下无丢失更新
+     *
+     * @param questionId 题目 id
+     * @return 是否更新成功
+     */
+    boolean incrementSubmitNum(long questionId);
+
+    /**
+     * 题目通过数原子自增（+1），数据库端单语句自增，保证并发下无丢失更新
+     *
+     * @param questionId 题目 id
+     * @return 是否更新成功
+     */
+    boolean incrementAcceptedNum(long questionId);
+
 }

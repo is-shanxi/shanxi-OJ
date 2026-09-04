@@ -123,11 +123,12 @@ onMounted(() => {
   loadData();
 });
 
-// 判题状态映射（与后端 QuestionSubmitStatusEnum 一致：0 待判题、1 判题中、2 成功、3 失败）
+// 判题状态映射（与后端 QuestionSubmitStatusEnum 一致：0 待判题、1 判题中、2 判题完成、3 失败）
+// 注意：status=2 仅表示判题流程完成（答错 / 超时也是 2），是否通过看判题信息列
 const STATUS_TEXT: Record<number, string> = {
   0: "等待中",
   1: "判题中",
-  2: "通过",
+  2: "判题完成",
   3: "失败",
 };
 

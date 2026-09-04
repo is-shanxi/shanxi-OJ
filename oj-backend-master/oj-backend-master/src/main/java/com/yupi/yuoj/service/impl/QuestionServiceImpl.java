@@ -1,6 +1,7 @@
 package com.yupi.yuoj.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.yuoj.common.ErrorCode;
@@ -154,6 +155,19 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question>
         return questionVOPage;
     }
 
+    @Override
+    public boolean incrementSubmitNum(long questionId) {
+        ThrowUtils.throwIf(questionId <= 0, ErrorCode.PARAMS_ERROR);
+        // 数据库端单语句自增，防止并发判题下的丢失更新；本项目 map-underscore-to-camel-case: false，列名与实体属性同名驼峰
+        return update(new UpdateWrapper<Question>().eq("id", questionId).setSql("submitNum = submitNum + 1"));
+    }
+
+    @Override
+    public boolean incrementAcceptedNum(long questionId) {
+        ThrowUtils.throwIf(questionId <= 0, ErrorCode.PARAMS_ERROR);
+        // 数据库端单语句自增，防止并发判题下的丢失更新；本项目 map-underscore-to-camel-case: false，列名与实体属性同名驼峰
+        return update(new UpdateWrapper<Question>().eq("id", questionId).setSql("acceptedNum = acceptedNum + 1"));
+    }
 
 }
 

@@ -13,9 +13,11 @@ import com.yupi.yuoj.model.dto.question.JudgeCase;
 import com.yupi.yuoj.judge.codesandbox.model.JudgeInfo;
 import com.yupi.yuoj.model.entity.Question;
 import com.yupi.yuoj.model.entity.QuestionSubmit;
+import com.yupi.yuoj.model.enums.JudgeInfoMessageEnum;
 import com.yupi.yuoj.model.enums.QuestionSubmitStatusEnum;
 import com.yupi.yuoj.service.QuestionService;
 import com.yupi.yuoj.service.QuestionSubmitService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +25,7 @@ import javax.annotation.Resource;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class JudgeServiceImpl implements JudgeService {
 
@@ -63,31 +66,42 @@ public class JudgeServiceImpl implements JudgeService {
         if (!update) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "题目状态更新错误");
         }
-        // 4）调用沙箱，获取到执行结果
-        CodeSandbox codeSandbox = CodeSandboxFactory.newInstance(type);
-        codeSandbox = new CodeSandboxProxy(codeSandbox);
-        String language = questionSubmit.getLanguage();
-        String code = questionSubmit.getCode();
-        // 获取输入用例
-        String judgeCaseStr = question.getJudgeCase();
-        List<JudgeCase> judgeCaseList = JSONUtil.toList(judgeCaseStr, JudgeCase.class);
-        List<String> inputList = judgeCaseList.stream().map(JudgeCase::getInput).collect(Collectors.toList());
-        ExecuteCodeRequest executeCodeRequest = ExecuteCodeRequest.builder()
-                .code(code)
-                .language(language)
-                .inputList(inputList)
-                .build();
-        ExecuteCodeResponse executeCodeResponse = codeSandbox.executeCode(executeCodeRequest);
-        List<String> outputList = executeCodeResponse.getOutputList();
-        // 5）根据沙箱的执行结果，设置题目的判题状态和信息
-        JudgeContext judgeContext = new JudgeContext();
-        judgeContext.setJudgeInfo(executeCodeResponse.getJudgeInfo());
-        judgeContext.setInputList(inputList);
-        judgeContext.setOutputList(outputList);
-        judgeContext.setJudgeCaseList(judgeCaseList);
-        judgeContext.setQuestion(question);
-        judgeContext.setQuestionSubmit(questionSubmit);
-        JudgeInfo judgeInfo = judgeManager.doJudge(judgeContext);
+        // 4）调用沙箱，获取到执行结果（判题是异步执行的，异常时兜底置为失败状态，避免提交永久停留在"判题中"）
+        JudgeInfo judgeInfo;
+        try {
+            CodeSandbox codeSandbox = CodeSandboxFactory.newInstance(type);
+            codeSandbox = new CodeSandboxProxy(codeSandbox);
+            String language = questionSubmit.getLanguage();
+            String code = questionSubmit.getCode();
+            // 获取输入用例
+            String judgeCaseStr = question.getJudgeCase();
+            List<JudgeCase> judgeCaseList = JSONUtil.toList(judgeCaseStr, JudgeCase.class);
+            List<String> inputList = judgeCaseList.stream().map(JudgeCase::getInput).collect(Collectors.toList());
+            ExecuteCodeRequest executeCodeRequest = ExecuteCodeRequest.builder()
+                    .code(code)
+                    .language(language)
+                    .inputList(inputList)
+                    .build();
+            ExecuteCodeResponse executeCodeResponse = codeSandbox.executeCode(executeCodeRequest);
+            List<String> outputList = executeCodeResponse.getOutputList();
+            // 5）根据沙箱的执行结果，设置题目的判题状态和信息
+            JudgeContext judgeContext = new JudgeContext();
+            judgeContext.setJudgeInfo(executeCodeResponse.getJudgeInfo());
+            judgeContext.setInputList(inputList);
+            judgeContext.setOutputList(outputList);
+            judgeContext.setJudgeCaseList(judgeCaseList);
+            judgeContext.setQuestion(question);
+            judgeContext.setQuestionSubmit(questionSubmit);
+            judgeInfo = judgeManager.doJudge(judgeContext);
+        } catch (Exception e) {
+            // runAsync 会吞掉异常栈，这里的日志是判题异常的唯一观测点
+            log.error("判题异常, questionSubmitId = {}", questionSubmitId, e);
+            QuestionSubmit questionSubmitFailUpdate = new QuestionSubmit();
+            questionSubmitFailUpdate.setId(questionSubmitId);
+            questionSubmitFailUpdate.setStatus(QuestionSubmitStatusEnum.FAILED.getValue());
+            questionSubmitService.updateById(questionSubmitFailUpdate);
+            throw e;
+        }
         // 6）修改数据库中的判题结果
         questionSubmitUpdate = new QuestionSubmit();
         questionSubmitUpdate.setId(questionSubmitId);
@@ -97,7 +111,11 @@ public class JudgeServiceImpl implements JudgeService {
         if (!update) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "题目状态更新错误");
         }
-        QuestionSubmit questionSubmitResult = questionSubmitService.getById(questionId);
+        // 7）判题通过则通过数 +1（判据统一引用枚举常量；提交数已在提交时计入，此处不再自增 submitNum）
+        if (JudgeInfoMessageEnum.ACCEPTED.getValue().equals(judgeInfo.getMessage())) {
+            questionService.incrementAcceptedNum(questionId);
+        }
+        QuestionSubmit questionSubmitResult = questionSubmitService.getById(questionSubmitId);
         return questionSubmitResult;
     }
 }

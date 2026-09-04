@@ -1,0 +1,20 @@
+schema: spec-driven
+
+# 项目上下文：生成 artifacts 时注入给 AI（勿在此写入任何真实口令）
+context: |
+  鱼皮 YuOJ 在线评测系统（教学项目）：前后端分离 + 独立代码沙箱，三个独立进程（注意：模块目录为双层嵌套同名）。
+  - oj-backend-master/oj-backend-master/ — 单体后端：Spring Boot 2.7.2 + Java 8，MyBatis Plus，端口 8121，context-path /api，包名 com.yupi.yuoj
+  - oj-code-sandbox-master/oj-code-sandbox-master/ — 代码沙箱：端口 8090，包名 com.yupi.yuojcodesandbox，模板方法模式（native / docker 两个实现）
+  - oj-frontend-master/yuoj-frontend-master/ — 前端：Vue CLI 5 + Vue 3 + TS + Arco Design + Vuex；generated/ 是 OpenAPI 自动生成客户端，勿手改，后端接口变更后重新生成
+  调用链：前端 →(HTTP + cookie session)→ 后端 :8121/api →(HTTP，固定请求头 auth: secretKey)→ 沙箱 :8090 的 POST /executeCode；改动任一端接口签名或鉴权头必须同步另一端。
+  判题域在后端 judge/ 包：JudgeServiceImpl → JudgeManager → CodeSandboxFactory → CodeSandboxProxy（静态代理），判题策略 JudgeContext + JudgeStrategy（新增语言判题加策略类，不改默认策略）。
+  约定：**/application.yml 不入库（本地从 *.yml.example 复制，真实口令不入库）；统一返回 BaseResponse（ResultUtils 封装），异常抛 BusinessException；权限校验用 @AuthCheck + AOP；逻辑删除字段 isDelete；map-underscore-to-camel-case: false（列名与实体属性同名）。提交信息用中文 conventional commits。
+  更多细节以仓库根 AGENTS.md 与 TECH_DESIGN.md（架构设计，最权威）为准。
+
+rules:
+  proposal:
+    - 用中文撰写
+    - 包含明确的 Non-goals（本次不做的内容）
+  specs:
+    - capability 目录按模块前缀组织：backend/…、sandbox/…、frontend/…
+    - 涉及后端↔沙箱接口签名或 auth 鉴权头的，必须写明两端同步要求
