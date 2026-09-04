@@ -87,6 +87,8 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "数据插入失败");
         }
         Long questionSubmitId = questionSubmit.getId();
+        // 提交即计数：按提交次数口径，无论判题结果如何（数据库端原子自增）
+        questionService.incrementSubmitNum(questionId);
         // 执行判题服务
         CompletableFuture.runAsync(() -> {
             judgeService.doJudge(questionSubmitId);
