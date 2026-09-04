@@ -23,6 +23,12 @@
           </a-button>
         </a-form-item>
       </a-form>
+      <div class="login-footer">
+        还没有账号？
+        <router-link to="/user/register" class="register-link">
+          立即注册
+        </router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -98,5 +104,18 @@ const handleSubmit = async () => {
   margin-top: 8px;
   height: 40px;
   font-size: 15px;
+}
+
+.login-footer {
+  margin-top: 4px;
+  text-align: center;
+  color: var(--lc-text-secondary);
+  font-size: 14px;
+}
+
+.register-link {
+  color: var(--lc-primary);
+  font-weight: 600;
+  text-decoration: none;
 }
 </style>
