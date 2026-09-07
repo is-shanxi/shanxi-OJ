@@ -129,7 +129,9 @@ public class JudgeServiceImpl implements JudgeService {
         questionSubmitUpdate.setJudgeInfo(JSONUtil.toJsonStr(judgeInfo));
         boolean update = questionSubmitService.updateById(questionSubmitUpdate);
         if (!update) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "题目状态更新错误");
+            // 提交行可能已被删除：此时状态尚未到终态，不能以 BusinessException 误导消费端按
+            // "业务已置终态"确认消息；抛非 BusinessException 让消费端 nack 转死信队列人工处置
+            throw new IllegalStateException("判题结果落库失败, questionSubmitId = " + questionSubmitId);
         }
         // 6）判题通过则通过数 +1（判据统一引用枚举常量；提交数已在提交时计入，此处不再自增 submitNum）
         if (JudgeInfoMessageEnum.ACCEPTED.getValue().equals(judgeInfo.getMessage())) {

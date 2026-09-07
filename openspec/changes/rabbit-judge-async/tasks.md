@@ -26,7 +26,7 @@
 - [x] 5.1 双模式功能回归：同一题目同一代码分别在 thread / rabbitmq 模式提交，判题终态、judgeInfo、submitNum/acceptedNum 计数口径一致，通过率展示正常
 - [x] 5.2 故障注入：rabbitmq 模式下停掉沙箱容器，确认重试耗尽后 FAILED、无消息死循环（主队列清空），恢复沙箱后新提交正常判题；停掉 RabbitMQ 容器提交代码，确认接口不报错、提交行停留 WAITING、恢复 broker 后由恢复任务重新触发判题
 - [x] 5.3 JMeter 测试计划（200 并发 × 60 秒，thread 与 rabbitmq 各一轮）落库到 `oj-backend-master/`，执行并记录对比结果：接口无 5xx、全部提交行到达终态（零永久 WAITING/RUNNING）、队列深度归零；`jmeter.log` 加入 `.gitignore`
-- [ ] 5.4 文档同步：`TECH_DESIGN.md` 更新判题调用链图与数据流（Producer/Consumer/恢复任务），`AGENTS.md` 本地运行说明补 RabbitMQ 依赖（Docker 容器启动 + 管理台端口）
+- [x] 5.4 文档同步：`TECH_DESIGN.md` 更新判题调用链图与数据流（Producer/Consumer/恢复任务），`AGENTS.md` 本地运行说明补 RabbitMQ 依赖（Docker 容器启动 + 管理台端口）
 
 ## 6. 收尾
 

@@ -17,7 +17,7 @@
   - 沙箱调用用 `RetryTemplate` 包裹：可重试异常（HTTP 失败/超时/沙箱 5xx）按指数退避重试 3 次（1s/2s/4s）；**重试期间不置终态**；耗尽后由 `doJudge` 自己置 FAILED 并抛 `BusinessException`（终态保证单点）。
   - 非可重试异常（题目不存在等业务错误）→ 置 FAILED → 抛。
 - **`RemoteCodeSandbox`**：HTTP 调用增加 connection/read 超时（配置化，read 超时大于题目最大 timeLimit）——消除"沙箱挂起 → 判题线程永久阻塞 → 消息永不 ack"的隐患，是手动 ack 语义的前置依赖。
-- **新增 `job/SubmitStuckRecoveryTask`**：每 5 分钟扫描——WAITING 超过 5 分钟的提交经 `JudgeMessageProducer` 接口重发（模式无关，兼作线程模式下的僵尸救援）；RUNNING 超过 30 分钟的置 FAILED 并记录日志。
+- **新增 `job/SubmitStuckRecoveryTask`**：每 5 分钟扫描——WAITING 超过 30 分钟的提交经 `JudgeMessageProducer` 接口重发（模式无关，兼作线程模式下的僵尸救援；阈值需远大于正常队列积压时长——压测实测 5 分钟阈值会把仍在排队的提交误判为消息丢失而放大积压）；RUNNING 超过 30 分钟的置 FAILED 并记录日志。
 - **配置**：`application.yml.example` 补 RabbitMQ 连接段（脱敏）+ `judge.async.type`（默认 `thread`，保证克隆即跑）；本地真实 `application.yml` 配 `rabbitmq`。
 - **文档**：TECH_DESIGN.md 判题链路图与调用链更新、AGENTS.md 本地运行说明补 RabbitMQ 依赖。
 - **压测**：JMeter 测试计划（.jmx）入库，`jmeter.log` 从仓库根移出（加入 .gitignore）。
