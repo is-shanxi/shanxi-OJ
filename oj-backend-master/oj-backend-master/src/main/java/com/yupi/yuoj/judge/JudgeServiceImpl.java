@@ -19,6 +19,9 @@ import com.yupi.yuoj.service.QuestionService;
 import com.yupi.yuoj.service.QuestionSubmitService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.retry.backoff.ExponentialBackOffPolicy;
+import org.springframework.retry.policy.SimpleRetryPolicy;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -41,6 +44,28 @@ public class JudgeServiceImpl implements JudgeService {
     @Value("${codesandbox.type:example}")
     private String type;
 
+    @Value("${codesandbox.http-connect-timeout:5000}")
+    private int sandboxHttpConnectTimeout;
+
+    @Value("${codesandbox.http-read-timeout:60000}")
+    private int sandboxHttpReadTimeout;
+
+    /**
+     * 沙箱调用重试模板：首次 + 3 次重试，指数退避 1s/2s/4s（累计约 7s）。
+     * 重试期间不触碰提交状态，判题终态保证单点收敛在 doJudge
+     */
+    private final RetryTemplate sandboxRetryTemplate = buildSandboxRetryTemplate();
+
+    private RetryTemplate buildSandboxRetryTemplate() {
+        ExponentialBackOffPolicy backOffPolicy = new ExponentialBackOffPolicy();
+        backOffPolicy.setInitialInterval(1000);
+        backOffPolicy.setMultiplier(2);
+        backOffPolicy.setMaxInterval(4000);
+        RetryTemplate retryTemplate = new RetryTemplate();
+        retryTemplate.setBackOffPolicy(backOffPolicy);
+        retryTemplate.setRetryPolicy(new SimpleRetryPolicy(4));
+        return retryTemplate;
+    }
 
     @Override
     public QuestionSubmit doJudge(long questionSubmitId) {
@@ -52,70 +77,64 @@ public class JudgeServiceImpl implements JudgeService {
         Long questionId = questionSubmit.getQuestionId();
         Question question = questionService.getById(questionId);
         if (question == null) {
+            // 非可重试业务异常：立即置为失败，避免该提交被卡死恢复任务无限重发
+            questionSubmitService.markJudgeFailed(questionSubmitId);
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "题目不存在");
         }
-        // 2）如果题目提交状态不为等待中，就不用重复执行了
-        if (!questionSubmit.getStatus().equals(QuestionSubmitStatusEnum.WAITING.getValue())) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "题目正在判题中");
+        // 2）CAS 认领判题权：仅当等待中（0）→ 判题中（1），
+        //    更新 0 行说明已被其他执行流认领或已是终态，直接跳过（幂等，防重复判题）
+        boolean claimed = questionSubmitService.casUpdateStatus(questionSubmitId,
+                QuestionSubmitStatusEnum.WAITING.getValue(), QuestionSubmitStatusEnum.RUNNING.getValue());
+        if (!claimed) {
+            log.info("提交不在等待中，跳过重复判题, questionSubmitId = {}", questionSubmitId);
+            return null;
         }
-        // 3）更改判题（题目提交）的状态为 “判题中”，防止重复执行
-        QuestionSubmit questionSubmitUpdate = new QuestionSubmit();
-        questionSubmitUpdate.setId(questionSubmitId);
-        questionSubmitUpdate.setStatus(QuestionSubmitStatusEnum.RUNNING.getValue());
-        boolean update = questionSubmitService.updateById(questionSubmitUpdate);
-        if (!update) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "题目状态更新错误");
-        }
-        // 4）调用沙箱，获取到执行结果（判题是异步执行的，异常时兜底置为失败状态，避免提交永久停留在"判题中"）
+        // 3）调用沙箱，获取到执行结果（沙箱瞬时失败按指数退避重试，重试期间不置终态）
         JudgeInfo judgeInfo;
         try {
-            CodeSandbox codeSandbox = CodeSandboxFactory.newInstance(type);
-            codeSandbox = new CodeSandboxProxy(codeSandbox);
-            String language = questionSubmit.getLanguage();
-            String code = questionSubmit.getCode();
-            // 获取输入用例
             String judgeCaseStr = question.getJudgeCase();
             List<JudgeCase> judgeCaseList = JSONUtil.toList(judgeCaseStr, JudgeCase.class);
             List<String> inputList = judgeCaseList.stream().map(JudgeCase::getInput).collect(Collectors.toList());
-            ExecuteCodeRequest executeCodeRequest = ExecuteCodeRequest.builder()
-                    .code(code)
-                    .language(language)
-                    .inputList(inputList)
-                    .build();
-            ExecuteCodeResponse executeCodeResponse = codeSandbox.executeCode(executeCodeRequest);
-            List<String> outputList = executeCodeResponse.getOutputList();
-            // 5）根据沙箱的执行结果，设置题目的判题状态和信息
+            ExecuteCodeResponse executeCodeResponse = sandboxRetryTemplate.execute(context -> {
+                CodeSandbox codeSandbox = CodeSandboxFactory.newInstance(type, sandboxHttpConnectTimeout, sandboxHttpReadTimeout);
+                codeSandbox = new CodeSandboxProxy(codeSandbox);
+                String language = questionSubmit.getLanguage();
+                String code = questionSubmit.getCode();
+                ExecuteCodeRequest executeCodeRequest = ExecuteCodeRequest.builder()
+                        .code(code)
+                        .language(language)
+                        .inputList(inputList)
+                        .build();
+                return codeSandbox.executeCode(executeCodeRequest);
+            });
+            // 4）根据沙箱的执行结果，设置题目的判题状态和信息
             JudgeContext judgeContext = new JudgeContext();
             judgeContext.setJudgeInfo(executeCodeResponse.getJudgeInfo());
             judgeContext.setInputList(inputList);
-            judgeContext.setOutputList(outputList);
+            judgeContext.setOutputList(executeCodeResponse.getOutputList());
             judgeContext.setJudgeCaseList(judgeCaseList);
             judgeContext.setQuestion(question);
             judgeContext.setQuestionSubmit(questionSubmit);
             judgeInfo = judgeManager.doJudge(judgeContext);
         } catch (Exception e) {
-            // runAsync 会吞掉异常栈，这里的日志是判题异常的唯一观测点
+            // 重试耗尽仍失败或判题策略异常：置失败终态后以业务异常上抛（消费端确认消息，线程池模式由生产者记录日志）
             log.error("判题异常, questionSubmitId = {}", questionSubmitId, e);
-            QuestionSubmit questionSubmitFailUpdate = new QuestionSubmit();
-            questionSubmitFailUpdate.setId(questionSubmitId);
-            questionSubmitFailUpdate.setStatus(QuestionSubmitStatusEnum.FAILED.getValue());
-            questionSubmitService.updateById(questionSubmitFailUpdate);
-            throw e;
+            questionSubmitService.markJudgeFailed(questionSubmitId);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "判题失败：" + e.getMessage());
         }
-        // 6）修改数据库中的判题结果
-        questionSubmitUpdate = new QuestionSubmit();
+        // 5）修改数据库中的判题结果
+        QuestionSubmit questionSubmitUpdate = new QuestionSubmit();
         questionSubmitUpdate.setId(questionSubmitId);
         questionSubmitUpdate.setStatus(QuestionSubmitStatusEnum.SUCCEED.getValue());
         questionSubmitUpdate.setJudgeInfo(JSONUtil.toJsonStr(judgeInfo));
-        update = questionSubmitService.updateById(questionSubmitUpdate);
+        boolean update = questionSubmitService.updateById(questionSubmitUpdate);
         if (!update) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "题目状态更新错误");
         }
-        // 7）判题通过则通过数 +1（判据统一引用枚举常量；提交数已在提交时计入，此处不再自增 submitNum）
+        // 6）判题通过则通过数 +1（判据统一引用枚举常量；提交数已在提交时计入，此处不再自增 submitNum）
         if (JudgeInfoMessageEnum.ACCEPTED.getValue().equals(judgeInfo.getMessage())) {
             questionService.incrementAcceptedNum(questionId);
         }
-        QuestionSubmit questionSubmitResult = questionSubmitService.getById(questionSubmitId);
-        return questionSubmitResult;
+        return questionSubmitService.getById(questionSubmitId);
     }
 }

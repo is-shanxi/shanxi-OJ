@@ -16,11 +16,23 @@ public class CodeSandboxFactory {
      * @return
      */
     public static CodeSandbox newInstance(String type) {
+        return newInstance(type, 5000, 60000);
+    }
+
+    /**
+     * 创建代码沙箱示例（远程沙箱支持配置 HTTP 连接/读取超时）
+     *
+     * @param type            沙箱类型
+     * @param connectTimeout  HTTP 连接超时（毫秒）
+     * @param readTimeout     HTTP 读取超时（毫秒），需大于题目判题配置的最大执行时限
+     * @return
+     */
+    public static CodeSandbox newInstance(String type, int connectTimeout, int readTimeout) {
         switch (type) {
             case "example":
                 return new ExampleCodeSandbox();
             case "remote":
-                return new RemoteCodeSandbox();
+                return new RemoteCodeSandbox(connectTimeout, readTimeout);
             case "thirdParty":
                 return new ThirdPartyCodeSandbox();
             default:

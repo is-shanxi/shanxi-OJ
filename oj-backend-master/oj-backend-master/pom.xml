@@ -47,6 +47,16 @@
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-data-redis</artifactId>
         </dependency>
+        <!-- rabbitmq（rabbitmq 模式异步判题） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <!-- spring retry（判题沙箱调用退避重试） -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
         <!-- https://doc.xiaominfo.com/knife4j/documentation/get_start.html-->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>

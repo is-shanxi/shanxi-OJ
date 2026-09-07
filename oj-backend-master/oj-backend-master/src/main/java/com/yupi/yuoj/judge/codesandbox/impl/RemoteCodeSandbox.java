@@ -19,6 +19,22 @@ public class RemoteCodeSandbox implements CodeSandbox {
 
     private static final String AUTH_REQUEST_SECRET = "secretKey";
 
+    /**
+     * HTTP 连接/读取超时（毫秒），read 需大于题目判题配置的最大执行时限，
+     * 避免沙箱挂起时判题线程（消息消费线程）永久阻塞
+     */
+    private final int connectTimeout;
+
+    private final int readTimeout;
+
+    public RemoteCodeSandbox() {
+        this(5000, 60000);
+    }
+
+    public RemoteCodeSandbox(int connectTimeout, int readTimeout) {
+        this.connectTimeout = connectTimeout;
+        this.readTimeout = readTimeout;
+    }
 
     @Override
     public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
@@ -28,6 +44,8 @@ public class RemoteCodeSandbox implements CodeSandbox {
         String responseStr = HttpUtil.createPost(url)
                 .header(AUTH_REQUEST_HEADER, AUTH_REQUEST_SECRET)
                 .body(json)
+                .setConnectionTimeout(connectTimeout)
+                .setReadTimeout(readTimeout)
                 .execute()
                 .body();
         if (StringUtils.isBlank(responseStr)) {

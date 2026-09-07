@@ -30,6 +30,25 @@ spring:
     password: changeme
     timeout: 5000
 #    password: changeme
+  # RabbitMQ 配置（judge.async.type = rabbitmq 时需要；thread 模式可忽略）
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: changeme
+    virtual-host: /
+    # 发布确认与回退（判题消息可靠投递观测）
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        # 判题消费者手动 ack
+        acknowledge-mode: manual
+        # 消费并发与预取（对齐单沙箱实例容量）
+        concurrency: 2
+        prefetch: 1
   # 文件上传
   servlet:
     multipart:
@@ -53,6 +72,13 @@ mybatis-plus:
       logic-delete-field: isDelete # 全局逻辑删除的实体字段名
       logic-delete-value: 1 # 逻辑已删除值（默认为 1）
       logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
+# 判题异步触发通道：thread（JVM 线程池，默认）/ rabbitmq（RabbitMQ 消息队列，需可用 broker）
+judge:
+  async:
+    type: thread
 # 代码沙箱配置
 codesandbox:
   type: remote
+  # 远程沙箱 HTTP 超时（毫秒），read 需大于题目判题配置的最大执行时限
+  http-connect-timeout: 5000
+  http-read-timeout: 60000

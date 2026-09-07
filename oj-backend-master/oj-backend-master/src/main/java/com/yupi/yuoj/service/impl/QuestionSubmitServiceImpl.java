@@ -1,12 +1,12 @@
 package com.yupi.yuoj.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.yuoj.common.ErrorCode;
 import com.yupi.yuoj.constant.CommonConstant;
 import com.yupi.yuoj.exception.BusinessException;
-import com.yupi.yuoj.judge.JudgeService;
 import com.yupi.yuoj.mapper.QuestionSubmitMapper;
 import com.yupi.yuoj.model.dto.questionsubmit.QuestionSubmitAddRequest;
 import com.yupi.yuoj.model.dto.questionsubmit.QuestionSubmitQueryRequest;
@@ -16,6 +16,7 @@ import com.yupi.yuoj.model.entity.User;
 import com.yupi.yuoj.model.enums.QuestionSubmitLanguageEnum;
 import com.yupi.yuoj.model.enums.QuestionSubmitStatusEnum;
 import com.yupi.yuoj.model.vo.QuestionSubmitVO;
+import com.yupi.yuoj.mq.JudgeMessageProducer;
 import com.yupi.yuoj.service.QuestionService;
 import com.yupi.yuoj.service.QuestionSubmitService;
 import com.yupi.yuoj.service.UserService;
@@ -23,12 +24,10 @@ import com.yupi.yuoj.utils.SqlUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -47,8 +46,7 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
     private UserService userService;
 
     @Resource
-    @Lazy
-    private JudgeService judgeService;
+    private JudgeMessageProducer judgeMessageProducer;
 
     /**
      * 提交题目
@@ -89,10 +87,8 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         Long questionSubmitId = questionSubmit.getId();
         // 提交即计数：按提交次数口径，无论判题结果如何（数据库端原子自增）
         questionService.incrementSubmitNum(questionId);
-        // 执行判题服务
-        CompletableFuture.runAsync(() -> {
-            judgeService.doJudge(questionSubmitId);
-        });
+        // 经异步通道触发判题（thread 线程池 / rabbitmq 消息队列，由 judge.async.type 决定）
+        judgeMessageProducer.sendJudgeTask(questionSubmitId);
         return questionSubmitId;
     }
 
@@ -153,6 +149,22 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         return questionSubmitVOPage;
     }
 
+    @Override
+    public boolean casUpdateStatus(long questionSubmitId, int fromStatus, int toStatus) {
+        return this.update(new UpdateWrapper<QuestionSubmit>()
+                .eq("id", questionSubmitId)
+                .eq("status", fromStatus)
+                .set("status", toStatus));
+    }
+
+    @Override
+    public boolean markJudgeFailed(long questionSubmitId) {
+        // 仅将非终态（等待中/判题中）置为失败，避免覆盖已完成的判题结果
+        return this.update(new UpdateWrapper<QuestionSubmit>()
+                .eq("id", questionSubmitId)
+                .in("status", QuestionSubmitStatusEnum.WAITING.getValue(), QuestionSubmitStatusEnum.RUNNING.getValue())
+                .set("status", QuestionSubmitStatusEnum.FAILED.getValue()));
+    }
 
 }
 

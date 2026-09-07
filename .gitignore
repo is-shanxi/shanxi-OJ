@@ -25,3 +25,7 @@ tmpCode/
 ANALYSIS.md
 TECH_DESIGN.md
 CLEANUP.md
+
+# JMeter 本地产物
+jmeter.log
+*.jtl

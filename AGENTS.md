@@ -27,18 +27,21 @@ npm run lint                    # ESLint（含 prettier 规则）
 ## 配置与环境（重要）
 
 - `**/application.yml`、`**/application-*.yml` 均被 .gitignore 排除；本地配置从同级 `*.yml.example` 模板复制并填入真实口令，**任何真实口令不入库**（README 里的示例口令已脱敏为 changeme）。
-- 后端依赖 MySQL（库名 `yuoj`，建表脚本 `sql/create_table.sql`）和 Redis（session 存储需要 Redis 可用）。
+- 后端依赖 MySQL（库名 `yuoj`，建表脚本 `sql/create_table.sql`）、Redis（session 存储需要 Redis 可用）；`judge.async.type = rabbitmq` 时还需 RabbitMQ（本地用 Docker 容器 `rabbitmq:4-management`，5672/15672；4.x 无默认 guest 用户，需自行 `rabbitmqctl add_user` + 授权 vhost `/`）。
 - 后端 `codesandbox.type` 配置决定沙箱实现：`example`（本地进程）/ `remote`（HTTP 调 8090 沙箱，默认）/ `thirdParty`。
+- 判题异步通道由 `judge.async.type` 决定：`thread`（JVM 线程池，example 模板默认，克隆即跑）/ `rabbitmq`（RabbitMQ 消息队列）。两通道判题语义一致，切换只影响触发方式。
 
 ## 跨服务调用链
 
 前端 →(HTTP + cookie session)→ 后端 :8121/api →(HTTP，固定请求头 `auth: secretKey`)→ 沙箱 :8090 的 `POST /executeCode`。改动任一端的接口签名或鉴权头时必须同步另一端。
 
-判题域在后端 `judge/` 包，采用多种设计模式，改动前先看现有结构：
+判题域在后端 `judge/` 包 + `mq/` 包（异步触发），改动前先看现有结构：
 
-- `JudgeServiceImpl` → `JudgeManager` → `CodeSandboxFactory`（按 type 选实现）→ `CodeSandboxProxy`（静态代理，统一加 auth 头）
+- 提交后经 `mq/JudgeMessageProducer` 接口异步触发判题（`ThreadJudgeProducer` / `RabbitJudgeProducer` 按 `judge.async.type` 装配），消费端 `mq/JudgeMessageConsumer` 手动 ack，死信进 `yuoj.judge.dlq`（管理台人工处置）
+- `JudgeServiceImpl` → `JudgeManager` → `CodeSandboxFactory`（按 type 选实现，HTTP 超时配置化）→ `CodeSandboxProxy`（静态代理，统一加 auth 头）；CAS 认领（WAITING→RUNNING 条件更新）保证幂等，重试（RetryTemplate 1s/2s/4s）与终态保证单点收敛在 `doJudge`
+- `job/SubmitStuckRecoveryTask` 每 5 分钟兜底：WAITING>5min 重发（阈值用 MySQL `NOW()` 计算，勿改回 Java Date——JDBC `serverTimezone=UTC` 会造成 8 小时错位）、RUNNING>30min 条件置 FAILED
 - 判题策略：`JudgeContext` + `JudgeStrategy`（`JavaLanguageJudgeStrategy` / `DefaultJudgeStrategy`），新增语言判题时加策略类而非改默认策略
-- 沙箱侧用模板方法：`JavaCodeSandboxTemplate` → `JavaNativeCodeSandbox` / `JavaDockerCodeSandbox`
+- 沙箱侧用模板方法：`JavaCodeSandboxTemplate` → `JavaNativeCodeSandbox` / `JavaDockerCodeSandbox`（沙箱把判题输入作为**程序参数**传入，不是 stdin）
 
 ## 代码约定
 
@@ -75,3 +78,4 @@ npm run lint                    # ESLint（含 prettier 规则）
 - `target/`、`dist/`、`node_modules/`、`tmpCode/` 均为产物，勿提交；沙箱运行时会在 `tmpCode/` 下落用户代码
 - 提交信息风格为中文 conventional commits（如 `feat: 单体后端…`、`chore: …脱敏`）
 - 文件头常有 `@author liyupi` 模板遗留注释，保持原样即可，不必批量清理
+- 命令行编译需 `JAVA_HOME=C:/Program Files/Java/jdk1.8.0_202`（项目 Java 8 + 旧 Lombok；默认 JAVA_HOME 的 JDK 21 会报 `JCTree$JCImport` 编译错）；沙箱进程还要把 JDK8 的 bin 前置到 PATH，否则 javac/java 版本不一致会产出 `UnsupportedClassVersionError`

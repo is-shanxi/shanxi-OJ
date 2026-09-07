@@ -55,4 +55,24 @@ public interface QuestionSubmitService extends IService<QuestionSubmit> {
      * @return
      */
     Page<QuestionSubmitVO> getQuestionSubmitVOPage(Page<QuestionSubmit> questionSubmitPage, User loginUser);
+
+    /**
+     * 条件更新提交状态（CAS）：仅当当前状态为 fromStatus 时置为 toStatus，
+     * 返回是否更新成功（0 行视为未认领/已终态），用于判题幂等认领与僵尸状态回收
+     *
+     * @param questionSubmitId 提交 id
+     * @param fromStatus       期望的当前状态
+     * @param toStatus         目标状态
+     * @return 是否更新成功
+     */
+    boolean casUpdateStatus(long questionSubmitId, int fromStatus, int toStatus);
+
+    /**
+     * 将非终态（等待中/判题中）的提交置为判题失败（status=3），
+     * 已是终态（成功/失败）的提交不受影响
+     *
+     * @param questionSubmitId 提交 id
+     * @return 是否更新成功
+     */
+    boolean markJudgeFailed(long questionSubmitId);
 }
