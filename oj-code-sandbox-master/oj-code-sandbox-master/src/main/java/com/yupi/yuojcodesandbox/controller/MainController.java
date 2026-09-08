@@ -1,5 +1,6 @@
 package com.yupi.yuojcodesandbox.controller;
 
+import com.yupi.yuojcodesandbox.CodeSandbox;
 import com.yupi.yuojcodesandbox.JavaNativeCodeSandbox;
 import com.yupi.yuojcodesandbox.model.ExecuteCodeRequest;
 import com.yupi.yuojcodesandbox.model.ExecuteCodeResponse;
@@ -20,8 +21,10 @@ public class MainController {
 
     private static final String AUTH_REQUEST_SECRET = "secretKey";
 
+    // MainController：注入接口，别注入具体类
     @Resource
-    private JavaNativeCodeSandbox javaNativeCodeSandbox;
+    private CodeSandbox codeSandbox;   // 唯一 bean 由配置决定
+
 
     @GetMapping("/health")
     public String healthCheck() {
@@ -46,6 +49,6 @@ public class MainController {
         if (executeCodeRequest == null) {
             throw new RuntimeException("请求参数为空");
         }
-        return javaNativeCodeSandbox.executeCode(executeCodeRequest);
+        return codeSandbox.executeCode(executeCodeRequest);
     }
 }

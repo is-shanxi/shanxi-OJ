@@ -11,6 +11,7 @@ import com.github.dockerjava.core.command.ExecStartResultCallback;
 import com.yupi.yuojcodesandbox.model.ExecuteCodeRequest;
 import com.yupi.yuojcodesandbox.model.ExecuteCodeResponse;
 import com.yupi.yuojcodesandbox.model.ExecuteMessage;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StopWatch;
 
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Component
+@ConditionalOnProperty(prefix = "codesandbox", name = "type", havingValue = "docker")
 public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
 
     private static final long TIME_OUT = 5000L;
