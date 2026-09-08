@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="oj-frontend-master/yuoj-frontend-master/public/shanxi-logo.png" width="110" alt="shanxi-OJ logo" />
-
+ 
 # shanxi-OJ 在线评测系统
 
 **前后端分离 + 独立代码沙箱的在线判题（Online Judge）系统**
